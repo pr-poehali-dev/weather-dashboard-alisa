@@ -15,6 +15,7 @@ export const AliceWidget = () => {
   const [isRecording, setIsRecording] = useState(false);
   const [inputText, setInputText] = useState('');
   const [isExpanded, setIsExpanded] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
 
@@ -27,7 +28,7 @@ export const AliceWidget = () => {
   }, [messages]);
 
   const sendMessage = async (text: string) => {
-    if (!text.trim()) return;
+    if (!text.trim() || isLoading) return;
 
     const userMessage: Message = {
       text,
@@ -37,15 +38,42 @@ export const AliceWidget = () => {
 
     setMessages(prev => [...prev, userMessage]);
     setInputText('');
+    setIsLoading(true);
 
-    setTimeout(() => {
-      const aliceMessage: Message = {
-        text: 'Для подключения YandexGPT API добавьте секрет YANDEX_GPT_API_KEY в настройках проекта.',
-        isUser: false,
-        timestamp: new Date()
-      };
-      setMessages(prev => [...prev, aliceMessage]);
-    }, 1000);
+    try {
+      const response = await fetch('https://functions.poehali.dev/703d2cef-0ffa-4924-840e-bf18eebea01c', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ message: text })
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        const aliceMessage: Message = {
+          text: data.response,
+          isUser: false,
+          timestamp: new Date()
+        };
+        setMessages(prev => [...prev, aliceMessage]);
+      } else {
+        toast({
+          title: "Ошибка",
+          description: data.message || 'Не удалось получить ответ от Алисы',
+          variant: "destructive"
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Ошибка подключения",
+        description: "Проверьте подключение к интернету",
+        variant: "destructive"
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleVoiceInput = () => {
@@ -137,8 +165,13 @@ export const AliceWidget = () => {
               <Button 
                 onClick={() => sendMessage(inputText)}
                 className="bg-primary hover:bg-primary/90"
+                disabled={isLoading}
               >
-                <Icon name="Send" size={20} />
+                {isLoading ? (
+                  <Icon name="Loader2" size={20} className="animate-spin" />
+                ) : (
+                  <Icon name="Send" size={20} />
+                )}
               </Button>
             </div>
           </div>
